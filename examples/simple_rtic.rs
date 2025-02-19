@@ -101,6 +101,7 @@ mod app {
         button.set_interrupt_enabled(gpio::Interrupt::EdgeLow, true);
 
         let mono = Rp2040Mono::new(ctx.device.TIMER);
+        unsafe { __symex_init_IO_IRQ_BANK0() };
 
         // Return resources and timer
         (
@@ -118,4 +119,30 @@ mod app {
             ctx.local.led.set_low();
         }
     }
+    #[inline(never)]
+    #[no_mangle]
+    #[allow(non_snake_case)]
+    #[link_section = ".text.symex"]
+    unsafe extern "C" fn __symex_init_IO_IRQ_BANK02() {
+        symex_lib::grant_access(
+            unsafe { core::mem::transmute(IO_IRQ_BANK0 as *mut ()) },
+            &__rtic_internal_local_resource_button,
+        );
+        symex_lib::grant_access(
+            unsafe { core::mem::transmute(IO_IRQ_BANK0 as *mut ()) },
+            &__rtic_internal_local_resource_led,
+        );
+        symex_lib::grant_access(
+            unsafe { core::mem::transmute(IO_IRQ_BANK0 as *mut ()) },
+            &__rtic_internal_shared_resource_debounce,
+        );
+        symex_lib::set_priority(
+            unsafe { core::mem::transmute(IO_IRQ_BANK0 as *mut ()) },
+            2usize as u32,
+        );
+        symex_lib::analyze(unsafe { core::mem::transmute(IO_IRQ_BANK0 as *mut ()) });
+        core::hint::black_box(__symex_init_IO_IRQ_BANK0);
+    }
+    #[used]
+    static __SYMEX_INIT_IO_IRQ_BANK02: unsafe extern "C" fn() -> () = __symex_init_IO_IRQ_BANK02;
 }
