@@ -1,7 +1,7 @@
 [package]
 name = "demo"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 cortex-m-rtic = "1.1.4"
@@ -18,11 +18,29 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 # We're using a Pico by default on this template
 rp-pico = "0.8"
 
-symex_lib = { path = "../../thesis/symex/crates/symex_lib"  }
-valid_derive = { path = "../../thesis/symex/crates/valid_derive" }
+symex_lib = { git = "https://github.com/ivajon/symex", branch = "feat_modular_backend" }
+valid_derive = { git = "https://github.com/ivajon/symex", branch = "feat_modular_backend" }
 
 rp2040-monotonic = "1.3"
 
 
 rp2040-hal = { version = "0.9.1", features = ["rt", "critical-section-impl"] }
 rp2040-boot2 = "0.3"
+
+# cargo build/run
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+overflow-checks = true
+
+# cargo build/run --release
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+# lto = 'fat'
+opt-level = 3
+overflow-checks = true

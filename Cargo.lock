@@ -5,6 +5,7 @@ version = 4
 [[package]]
 name = "any_derive"
 version = "1.0.0"
+source = "git+https://github.com/ivajon/symex?branch=feat_modular_backend#92d8d4c944604b59366dd35b7eb044b1753af39b"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -611,6 +612,7 @@ dependencies = [
 [[package]]
 name = "rtic_easy"
 version = "0.0.1"
+source = "git+https://github.com/ivajon/symex?branch=feat_modular_backend#92d8d4c944604b59366dd35b7eb044b1753af39b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -680,6 +682,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "symex_lib"
 version = "1.0.0"
+source = "git+https://github.com/ivajon/symex?branch=feat_modular_backend#92d8d4c944604b59366dd35b7eb044b1753af39b"
 dependencies = [
  "any_derive",
  "heapless",
@@ -745,6 +748,7 @@ checksum = "1f6cc3adc849b5292b4075fc0d5fdcf2f24866e88e336dd27a8943090a520508"
 [[package]]
 name = "valid_derive"
 version = "1.0.0"
+source = "git+https://github.com/ivajon/symex?branch=feat_modular_backend#92d8d4c944604b59366dd35b7eb044b1753af39b"
 dependencies = [
  "quote",
  "syn 1.0.109",
