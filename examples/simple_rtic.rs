@@ -250,6 +250,11 @@ mod app {
             };
             tries += 1;
         }
+
+        if tries >= 2 {
+            let led = unsafe { &(*(&*__rtic_internal_local_resource_led.get()).as_ptr()) };
+            led.set_low();
+        }
         cx.shared.debounce.lock(|debounce| *debounce = true);
     }
 }
