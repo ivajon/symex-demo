@@ -7,7 +7,7 @@ use nrf52840_hal::pac;
 use symex_lib::GetLayout;
 
 pub struct Systick<const HZ: u32> {}
-const FLASH_START: u32 = 0x10000000;
+const FLASH_START: u32 = 0x00820000;
 const FLASH_END: u32 = 0x10000000 + 2048 * 1024 - 0x100;
 
 impl<const HZ: u32> Systick<HZ> {
@@ -84,8 +84,15 @@ impl<const PIN_ID: u32> GetLayout for MockLed<PIN_ID> {
     dispatchers = []
 )]
 mod app {
+    use core::arch::asm;
+
     use fugit::Duration;
-    use nrf52840_hal::{gpio::Level, monotonic::MonotonicRtc, pac::RTC0, rtc::RtcInterrupt};
+    use nrf52840_hal::{
+        gpio::Level,
+        monotonic::MonotonicRtc,
+        pac::{mwu::region::start, RTC0},
+        rtc::RtcInterrupt,
+    };
 
     use panic_halt as _;
 
@@ -191,8 +198,11 @@ mod app {
         cx.shared.debounce.lock(|debounce| *debounce = false);
 
         while time < deadline && tries < 2 {
-            cortex_m::asm::nop();
+            for _ in 0..1000 {
+                unsafe { asm!("nop") }
+            }
             let new_time = cx.local.systic.time();
+            symex_lib::assume(new_time > started);
             time = match new_time.checked_sub(started) {
                 Some(val) => val,
                 _ => break,
@@ -200,10 +210,10 @@ mod app {
             tries += 1;
         }
 
-        //if tries >= 2 {
-        //    let led = unsafe { &(*(&*__rtic_internal_local_resource_led.get()).as_ptr()) };
-        //    led.set_low();
-        //}
+        if tries >= 2 {
+            let led = unsafe { &(*(&*__rtic_internal_local_resource_led.get()).as_ptr()) };
+            led.set_low();
+        }
         cx.shared.debounce.lock(|debounce| *debounce = true);
     }
 }
