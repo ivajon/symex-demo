@@ -8,8 +8,6 @@ rustflags = [
       "link-arg=--nmagic",
       "-C",
       "link-arg=-Tmem_link.x",
-      "-C",
-      "link-arg=-Tdefmt.x",
 
     # Code-size optimizations.
     #   trap unreachable can save a lot of space, but requires nightly compiler.
@@ -22,7 +20,7 @@ rustflags = [
 ]
 
 [build]
-target = "thumbv6m-none-eabi"
+target = "thumbv7em-none-eabihf"
 
 [env]
 DEFMT_LOG = "debug"

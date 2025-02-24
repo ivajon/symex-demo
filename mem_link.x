@@ -1,3 +1,4 @@
+
 /* # Developer notes
 
 - Symbols that start with a double underscore (__) are considered "private"
@@ -90,7 +91,7 @@ SECTIONS
   PROVIDE(_stext = ADDR(.vector_table) + SIZEOF(.vector_table));
 
   /* ### .text */
-  .text :
+  .text ORIGIN(RAM2):
   {
     __stext = .;
     *(.Reset);
@@ -103,15 +104,8 @@ SECTIONS
     *(.HardFault.*);
 
     . = ALIGN(4); /* Pad .text to the alignment to workaround overlapping load section bug in old lld */
-    PROVIDE(__flash= ORIGIN(FLASH));
-    PROVIDE(__flash_end = ORIGIN(FLASH)+LENGTH(FLASH));
     __etext = .;
-  } > FLASH
-
-  .ram_code :
-  {
-      *(.ram_code .ram_code.*);
-  } > RAM AT> FLASH
+  } > RAM2 
 
   /* ### .rodata */
   .rodata : ALIGN(4)
@@ -135,7 +129,7 @@ SECTIONS
     __sdata = .;
     *(.data .data.*);
     . = ALIGN(4); /* 4-byte align the end (VMA) of this section */
-  } > RAM AT>FLASH
+  } > RAM2 AT>FLASH
   /* Allow sections from user `memory.x` injected using `INSERT AFTER .data` to
    * use the .data loading mechanism by pushing __edata. Note: do not change
    * output region or load region in those user sections! */
@@ -173,13 +167,14 @@ SECTIONS
   } > RAM
   /* Allow sections from user `memory.x` injected using `INSERT AFTER .bss` to
    * use the .bss zeroing mechanism by pushing __ebss. Note: do not change
- * output region or load region in those user sections! */
-. = ALIGN(4);
-__ebss = .;
+   * output region or load region in those user sections! */
+  . = ALIGN(4);
+  __ebss = .;
 
-/* ### .uninit */
+  /* ### .uninit */
   .uninit (NOLOAD) : ALIGN(4)
   {
+    .buffer = ALIGN(4);
     . = ALIGN(4);
     __suninit = .;
     *(.uninit .uninit.*);
@@ -273,7 +268,7 @@ the -fPIC flag. See the documentation of the `cc::Build.pic` method for details.
 /* This will usually be provided by a device crate generated using svd2rust (see `device.x`) */
 INCLUDE device.x
 
-ASSERT(SIZEOF(.vector_table) <= 0xc0, "
-There can't be more than 32 interrupt handlers. This may be a bug in
-your device crate, or you may have registered more than 32 interrupt
+ASSERT(SIZEOF(.vector_table) <= 0x400, "
+There can't be more than 240 interrupt handlers. This may be a bug in
+your device crate, or you may have registered more than 240 interrupt
 handlers.");

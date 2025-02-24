@@ -2,7 +2,8 @@
 #![no_main]
 #![feature(type_alias_impl_trait, specialization)]
 
-use rp_pico::hal::fugit::Duration;
+use fugit::Duration;
+use nrf52840_hal::pac;
 use symex_lib::GetLayout;
 
 pub struct Systick<const HZ: u32> {}
@@ -45,31 +46,17 @@ pub struct MockLed<const PIN_ID: u32> {}
 
 impl<const PIN_ID: u32> MockLed<PIN_ID> {
     fn set_high(&self) {
-        use pac::io_bank0::gpio::gpio_ctrl::OEOVER_A;
-        use rp_pico::pac;
-        let gpio = unsafe { &*pac::IO_BANK0::PTR };
-        assert!(PIN_ID < 0xf0);
-        let io = gpio.gpio(PIN_ID as usize);
-        let ctrl = io.gpio_ctrl();
-        //let variant = match override_value {
-        //    OutputEnableOverride::Normal => OEOVER_A::NORMAL,
-        //    OutputEnableOverride::Invert => OEOVER_A::INVERT,
-        //    OutputEnableOverride::Disable => OEOVER_A::DISABLE,
-        //    OutputEnableOverride::Enable => OEOVER_A::ENABLE,
-        //};
-
-        ctrl.modify(|_, w| w.oeover().variant(OEOVER_A::ENABLE));
+        let gpio = unsafe { &*pac::P0::ptr() };
+        assert!(PIN_ID < 0xff);
+        gpio.outset.write(|w| unsafe { w.bits(1 << PIN_ID) });
     }
     fn set_low(&self) {
-        use pac::io_bank0::gpio::gpio_ctrl::OEOVER_A;
-        use rp_pico::pac;
-        let gpio = unsafe { &*pac::IO_BANK0::PTR };
-        assert!(PIN_ID < 0xf0);
-        let io = gpio.gpio(PIN_ID as usize);
-        let ctrl = io.gpio_ctrl();
-        ctrl.modify(|_, w| w.oeover().variant(OEOVER_A::DISABLE));
+        let gpio = unsafe { &*pac::P0::ptr() };
+        assert!(PIN_ID < 0xff);
+        gpio.outclr.write(|w| unsafe { w.bits(1 << PIN_ID) });
     }
 }
+
 impl<const PIN_ID: u32> GetLayout for MockLed<PIN_ID> {
     fn get_layout<const N: usize>(
         &self,
@@ -82,10 +69,10 @@ impl<const PIN_ID: u32> GetLayout for MockLed<PIN_ID> {
                 size: core::mem::size_of::<Self>(),
             })
             .unwrap();
-        let gpio = unsafe { &*rp_pico::pac::IO_BANK0::PTR };
+        let gpio = unsafe { &*pac::P0::ptr() };
         layout
             .push(layout_trait::Layout {
-                address: rp_pico::pac::IO_BANK0::PTR as usize,
+                address: pac::P0::ptr() as usize,
                 size: core::mem::size_of_val(gpio),
             })
             .unwrap();
@@ -93,52 +80,19 @@ impl<const PIN_ID: u32> GetLayout for MockLed<PIN_ID> {
 }
 
 #[symex_lib::easy(
-    device = rp_pico::pac,
+    device = nrf52840_hal::pac,
     dispatchers = []
 )]
 mod app {
-    use embedded_hal::digital::InputPin;
-    use embedded_hal_0_2::digital::v2::OutputPin;
     use fugit::Duration;
-    use rp_pico::hal as rp2040_hal;
-    use rp_pico::hal::fugit::ExtU32;
-    use rp_pico::XOSC_CRYSTAL_FREQ;
+    use nrf52840_hal::{gpio::Level, monotonic::MonotonicRtc, pac::RTC0, rtc::RtcInterrupt};
 
-    //use defmt::*;
-    use defmt_rtt as _;
-
-    use rp2040_hal::{
-        clocks,
-        gpio::{
-            self,
-            bank0::{Gpio11, Gpio12, Gpio13, Gpio2, Gpio22, Gpio25, Gpio3},
-            FunctionSio, Pins, PullDown, SioInput, SioOutput,
-        },
-        pac, Sio, Watchdog, I2C,
-    };
-    use rp2040_monotonic::Rp2040Monotonic;
-    use symex_lib::symbolic;
-
-    use core::mem::MaybeUninit;
-
-    use panic_probe as _;
+    use panic_halt as _;
 
     use crate::{MockLed, Systick};
 
-    type I2CBus = I2C<
-        pac::I2C1,
-        (
-            gpio::Pin<Gpio2, gpio::FunctionI2C, PullDown>,
-            gpio::Pin<Gpio3, gpio::FunctionI2C, PullDown>,
-        ),
-    >;
-
-    type Led1 = gpio::Pin<Gpio13, FunctionSio<SioOutput>, PullDown>;
-    type Led2 = gpio::Pin<Gpio12, FunctionSio<SioOutput>, PullDown>;
-    type Led3 = gpio::Pin<Gpio11, FunctionSio<SioOutput>, PullDown>;
-
-    #[monotonic(binds = TIMER_IRQ_0, default = true)]
-    type Rp2040Mono = Rp2040Monotonic;
+    #[monotonic(binds = RTC0, default = true)]
+    type Rp2040Mono = MonotonicRtc<RTC0, 32768>;
 
     #[shared]
     struct Shared {
@@ -149,50 +103,45 @@ mod app {
     struct Local {
         systic: Systick<125_000_000>,
         led_state: bool,
-        led: MockLed<13>,
+        led: MockLed<17>,
     }
 
     #[init(local=[
-        // Task local initialized resources are static
-        // Here we use MaybeUninit to allow for initialization in init()
-        // This enables its usage in driver initialization
-        i2c_ctx: MaybeUninit<I2CBus> = MaybeUninit::uninit()
     ])]
-    fn init(mut ctx: init::Context) -> (Shared, Local, init::Monotonics) {
-        defmt::info!("init");
+    fn init(mut cx: init::Context) -> (Shared, Local, init::Monotonics) {
+        let clocks = nrf52840_hal::Clocks::new(cx.device.CLOCK)
+            .enable_ext_hfosc()
+            .start_lfclk();
         // Initialize the interrupt for the RP2040 timer and obtain the token
         // proving that we have.
         // Configure the clocks, watchdog - The default is to generate a 125 MHz system clock
 
-        let mut watchdog = Watchdog::new(ctx.device.WATCHDOG);
-        let clocks = clocks::init_clocks_and_plls(
-            XOSC_CRYSTAL_FREQ,
-            ctx.device.XOSC,
-            ctx.device.CLOCKS,
-            ctx.device.PLL_SYS,
-            ctx.device.PLL_USB,
-            &mut ctx.device.RESETS,
-            &mut watchdog,
-        )
-        .ok()
-        .unwrap();
-
         // Init LED pin
-        let sio = Sio::new(ctx.device.SIO);
-        let gpioa = Pins::new(
-            ctx.device.IO_BANK0,
-            ctx.device.PADS_BANK0,
-            sio.gpio_bank0,
-            &mut ctx.device.RESETS,
-        );
-        let mut led = gpioa.gpio25.into_push_pull_output();
-        unsafe { led.set_low().unwrap_unchecked() }
+        let p0 = nrf52840_hal::gpio::p0::Parts::new(cx.device.P0);
 
-        let button = gpioa.gpio22.into_pull_down_input();
-        button.set_interrupt_enabled(gpio::Interrupt::EdgeHigh, true);
-        button.set_interrupt_enabled(gpio::Interrupt::EdgeLow, true);
+        let mono = MonotonicRtc::new(cx.device.RTC0, &clocks).expect("Invalid rtc config");
+        let button = p0.p0_13.into_pullup_input().degrade();
+        let led = p0.p0_17.into_push_pull_output(Level::Low).degrade();
+        core::hint::black_box(&led);
+        core::hint::black_box(&button);
+        let gpiote = nrf52840_hal::gpiote::Gpiote::new(cx.device.GPIOTE);
 
-        let mono = Rp2040Monotonic::new(ctx.device.TIMER);
+        // Set btn1 to generate event on channel 0 and enable interrupt
+        gpiote
+            .channel0()
+            .input_pin(&button)
+            .hi_to_lo()
+            .enable_interrupt();
+        // Set both btn3 & btn4 to generate port event
+        gpiote.port().input_pin(&button).low();
+        // Enable interrupt for port event
+        gpiote.port().enable_interrupt();
+
+        let mut rtc1 = nrf52840_hal::rtc::Rtc::new(cx.device.RTC1, 0).unwrap();
+        rtc1.enable_interrupt(RtcInterrupt::Compare0, None);
+        // Poll button every second.
+        rtc1.set_compare(nrf52840_hal::rtc::RtcCompareReg::Compare0, 32768)
+            .unwrap();
 
         // Return resources and timer
         (
@@ -205,7 +154,8 @@ mod app {
             init::Monotonics(mono),
         )
     }
-    #[task(binds = TIMER_IRQ_3 ,priority = 2, shared = [debounce])]
+
+    #[task(binds =  TIMER0,priority = 2, shared = [debounce])]
     /// Just here to make the analisys a bit more interresting!
     fn task_3(mut cx: task_3::Context) {
         cx.shared.debounce.lock(|el| {
@@ -213,23 +163,24 @@ mod app {
         });
     }
 
-    #[task(binds = TIMER_IRQ_2 ,priority = 1, shared = [debounce], local = [led_state,led])]
+    #[task(binds =  RTC1,priority = 1, shared = [debounce], local = [led_state,led])]
     fn button_handler(mut cx: button_handler::Context) {
         let mut retry = 0;
         while !cx.shared.debounce.lock(|l| *l) {
-            if retry > 2 {
+            if retry >= 2 {
                 //Silently fail and wait for next signal.
                 return;
             }
             retry += 1;
         }
+        cx.shared.debounce.lock(|l| *l = false);
         match cx.local.led_state {
             true => cx.local.led.set_high(),
             false => cx.local.led.set_low(),
         }
     }
 
-    #[task(binds = IO_IRQ_BANK0,priority = 3, shared = [debounce], local = [systic])]
+    #[task(binds = GPIOTE,priority = 3, shared = [debounce], local = [systic])]
     fn button_reciever(mut cx: button_reciever::Context) {
         let started = cx.local.systic.time();
         let mut time = started - started;
@@ -242,7 +193,6 @@ mod app {
         while time < deadline && tries < 2 {
             cortex_m::asm::nop();
             let new_time = cx.local.systic.time();
-            symex_lib::assume(new_time.ticks() > time.ticks());
             time = match new_time.checked_sub(started) {
                 Some(val) => val,
                 _ => break,
