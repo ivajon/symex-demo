@@ -7,8 +7,8 @@ use nrf52840_hal::pac;
 use symex_lib::GetLayout;
 
 pub struct Systick<const HZ: u32> {}
-const FLASH_START: u32 = 0x00820000;
-const FLASH_END: u32 = 0x10000000 + 2048 * 1024 - 0x100;
+const FLASH_START: u32 = 0;
+const FLASH_END: u32 = 0;
 
 impl<const HZ: u32> Systick<HZ> {
     pub fn time(&self) -> Duration<u32, 1, HZ> {
@@ -40,6 +40,9 @@ impl<const HZ: u32> layout_trait::GetLayout for Systick<HZ> {
             })
             .unwrap();
     }
+}
+pub struct SecretKey {
+    key: u64,
 }
 
 pub struct MockLed<const PIN_ID: u32> {}
@@ -84,7 +87,7 @@ impl<const PIN_ID: u32> GetLayout for MockLed<PIN_ID> {
     dispatchers = []
 )]
 mod app {
-    use core::arch::asm;
+    use core::{arch::asm, hint::black_box};
 
     use fugit::Duration;
     use nrf52840_hal::{
@@ -96,7 +99,7 @@ mod app {
 
     use panic_halt as _;
 
-    use crate::{MockLed, Systick};
+    use crate::{MockLed, SecretKey, Systick};
 
     #[monotonic(binds = RTC0, default = true)]
     type Rp2040Mono = MonotonicRtc<RTC0, 32768>;
@@ -110,6 +113,7 @@ mod app {
     struct Local {
         systic: Systick<125_000_000>,
         led_state: bool,
+        secret_key: SecretKey,
         led: MockLed<17>,
     }
 
@@ -156,6 +160,7 @@ mod app {
             Local {
                 systic: Systick {},
                 led_state: false,
+                secret_key: SecretKey { key: 0xDEAD_BEEF },
                 led: MockLed {},
             },
             init::Monotonics(mono),
@@ -170,7 +175,7 @@ mod app {
         });
     }
 
-    #[task(binds =  RTC1,priority = 1, shared = [debounce], local = [led_state,led])]
+    #[task(binds =  RTC1,priority = 1, shared = [debounce], local = [led_state,led, secret_key])]
     fn button_handler(mut cx: button_handler::Context) {
         let mut retry = 0;
         while !cx.shared.debounce.lock(|l| *l) {
@@ -189,31 +194,42 @@ mod app {
 
     #[task(binds = GPIOTE,priority = 3, shared = [debounce], local = [systic])]
     fn button_reciever(mut cx: button_reciever::Context) {
-        let started = cx.local.systic.time();
-        let mut time = started - started;
-        let mut tries = 0;
-
-        let deadline: Duration<u32, 1, 125_000_000> = Duration::<u32, 1, 125_000_000>::millis(2);
-
+        // Access local variable.
+        let _started = cx.local.systic.time();
+        // Access shared variable.
+        let break_safety = cx.shared.debounce.lock(|debounce| *debounce);
         cx.shared.debounce.lock(|debounce| *debounce = false);
-
-        while time < deadline && tries < 2 {
-            for _ in 0..1000 {
-                unsafe { asm!("nop") }
-            }
-            let new_time = cx.local.systic.time();
-            symex_lib::assume(new_time > started);
-            time = match new_time.checked_sub(started) {
-                Some(val) => val,
-                _ => break,
-            };
-            tries += 1;
+        if break_safety {
+            // Access other tasks local variable.
+            let resource = unsafe { &*__rtic_internal_local_resource_secret_key.get() };
+            black_box(&resource);
+            let inner_resource = unsafe { &*resource.as_ptr() };
+            black_box(inner_resource);
+            let forbidden_value = inner_resource.key;
+            black_box(&forbidden_value);
         }
+        unsafe { core::ptr::read_volatile(&alloc(true, false)) };
+    }
 
-        if tries >= 2 {
-            let led = unsafe { &(*(&*__rtic_internal_local_resource_led.get()).as_ptr()) };
-            led.set_low();
+    #[inline(never)]
+    #[no_mangle]
+    fn alloc(large: bool, small: bool) {
+        if large {
+            alloc_large();
+            return;
         }
-        cx.shared.debounce.lock(|debounce| *debounce = true);
+        if small {
+            alloc_small();
+        }
+    }
+    #[inline(never)]
+    fn alloc_small() {
+        let buffer = [0u8; 512];
+        core::hint::black_box(&buffer);
+    }
+    #[inline(never)]
+    fn alloc_large() {
+        let buffer = [0u8; 2048];
+        core::hint::black_box(&buffer);
     }
 }
