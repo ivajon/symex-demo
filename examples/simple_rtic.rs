@@ -93,7 +93,6 @@ impl<const PIN_ID: u32> GetLayout for MockLed<PIN_ID> {
 }
 
 #[symex_lib::easy(
-    freq = 1hz,
     device = rp_pico::pac,
     dispatchers = []
 )]
@@ -251,10 +250,10 @@ mod app {
             tries += 1;
         }
 
-        if tries >= 2 {
-            let led = unsafe { &(*(&*__rtic_internal_local_resource_led.get()).as_ptr()) };
-            led.set_low();
-        }
+        //if tries >= 2 {
+        //    let led = unsafe { &(*(&*__rtic_internal_local_resource_led.get()).as_ptr()) };
+        //    led.set_low();
+        //}
         cx.shared.debounce.lock(|debounce| *debounce = true);
     }
 }

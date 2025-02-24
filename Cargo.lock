@@ -14,7 +14,7 @@ dependencies = [
 [[package]]
 name = "any_derive"
 version = "1.0.0"
-source = "git+https://github.com/ivajon/symex?branch=easy#cf212572ddedeb5315b2077e721277b2dffd1867"
+source = "git+https://github.com/ivajon/symex?branch=easy#b64218629a0ddddf924a04a4f85bc45f06fd92a3"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -1188,7 +1188,7 @@ dependencies = [
 [[package]]
 name = "rtic_easy"
 version = "0.0.1"
-source = "git+https://github.com/ivajon/symex?branch=easy#cf212572ddedeb5315b2077e721277b2dffd1867"
+source = "git+https://github.com/ivajon/symex?branch=easy#b64218629a0ddddf924a04a4f85bc45f06fd92a3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1297,7 +1297,7 @@ dependencies = [
 [[package]]
 name = "symex_lib"
 version = "1.0.0"
-source = "git+https://github.com/ivajon/symex?branch=easy#cf212572ddedeb5315b2077e721277b2dffd1867"
+source = "git+https://github.com/ivajon/symex?branch=easy#b64218629a0ddddf924a04a4f85bc45f06fd92a3"
 dependencies = [
  "any_derive",
  "heapless 0.7.17",
@@ -1428,7 +1428,7 @@ dependencies = [
 [[package]]
 name = "valid_derive"
 version = "1.0.0"
-source = "git+https://github.com/ivajon/symex?branch=easy#cf212572ddedeb5315b2077e721277b2dffd1867"
+source = "git+https://github.com/ivajon/symex?branch=easy#b64218629a0ddddf924a04a4f85bc45f06fd92a3"
 dependencies = [
  "quote",
  "syn 1.0.109",
