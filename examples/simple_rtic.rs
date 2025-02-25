@@ -219,13 +219,9 @@ mod app {
             return;
         }
         if small {
-            alloc_small();
+            let buffer = [0u8; 512];
+            core::hint::black_box(&buffer);
         }
-    }
-    #[inline(never)]
-    fn alloc_small() {
-        let buffer = [0u8; 512];
-        core::hint::black_box(&buffer);
     }
     #[inline(never)]
     fn alloc_large() {
